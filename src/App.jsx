@@ -43,38 +43,45 @@ function App() {
     setLoading(true);
 
     try {
-      let contents = messages.map((msg) => ({
+      // Keep last 5 messages for context
+      const recentMessages = [...messages, newMessage].slice(-5);
+
+      let contents = recentMessages.map((msg) => ({
         role: msg.role === "bot" ? "model" : "user",
         parts: [{ text: msg.content }],
       }));
 
       let newParts = [];
-      if (input) newParts.push({ text: input });
       if (image) {
         const base64 = await fileToBase64(image);
-        newParts.push({ inline_data: { mime_type: image.type, data: base64 } });
+        newParts.push({
+          inline_data: { mime_type: image.type, data: base64 },
+        });
       }
 
+      // Add refined system prompt at the end
       contents.push({
         role: "user",
         parts: [
           {
             text: `
-You are a highly visual recycling assistant. Answer ONLY about recycling, reuse, disposal, or cleanliness. 
-- Start with a **bold heading** summarizing the main advice.
-- Use bullet points or numbered lists for steps or tips.
-- Use **bold** for important keywords.
-- Include relevant emojis (♻️, ✅, ⚠️, 🧽, 🏭) for clarity.
-- If the user uploads an image, describe what it likely is and give tailored advice.
-- Keep points short, readable, and professional.
-- Format fully in Markdown using headings, lists, bold, and emojis.
-            `.trim(),
+You are a friendly AI assistant called CleanSight 🌱 that helps users with recycling, reuse, and proper disposal of everyday items. 
+- Focus on practical reuse tips, DIY hacks, and safe disposal.
+- Only warn about danger if the item is truly hazardous (e.g., chemicals, gas cylinders).
+- Always start with a bold heading summarizing the main advice.
+- Use bullet points or numbered steps.
+- Include emojis (♻️, ✅, ⚠️, 🧽, 🏭) for clarity.
+- If the user uploads an image, describe it briefly and give personalized advice for that item.
+- Keep it friendly, engaging, and concise.
+- Format fully in Markdown with headings, lists, bold, and emojis.
+- Assume the user is asking about ordinary household items unless explicitly shown to be hazardous.
+          `.trim(),
           },
           ...newParts,
         ],
       });
 
-      // Call serverless function instead of Gemini directly
+      // Call serverless function
       const res = await axios.post("/api/gemini", { contents });
       const rawReply = res.data.reply || "⚠️ No response from CleanSight AI.";
       const botReply = formatGeminiOutput(rawReply);
@@ -132,12 +139,7 @@ You are a highly visual recycling assistant. Answer ONLY about recycling, reuse,
         <div className="p-3 border-t flex items-center gap-2 bg-white">
           <label className="cursor-pointer p-2 bg-green-100 rounded-full hover:bg-green-200 transition">
             <Upload className="w-5 h-5 text-green-700" />
-            <input
-              type="file"
-              className="hidden"
-              accept="image/*"
-              onChange={(e) => setImage(e.target.files[0])}
-            />
+            <input type="file" className="hidden" accept="image/*" onChange={(e) => setImage(e.target.files[0])} />
           </label>
 
           <input
