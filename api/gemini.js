@@ -1,21 +1,22 @@
-// api/gemini.js
-import axios from "axios";
-
 export default async function handler(req, res) {
-  try {
-    const { messages } = req.body;
+  console.log("Received request:", req.body);
+  console.log("API Key present?", !!process.env.GEMINI_API_KEY);
 
-    if (!messages) {
-      return res.status(400).json({ error: "No messages provided" });
-    }
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
+    const { contents } = req.body;
+    if (!contents) return res.status(400).json({ error: "No contents provided" });
 
     const response = await axios.post(
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent",
-      { contents: messages },
+      { contents },
       {
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.GEMINI_API_KEY}`
+          Authorization: `Bearer ${process.env.GEMINI_API_KEY}`,
         },
       }
     );
@@ -26,7 +27,7 @@ export default async function handler(req, res) {
 
     res.status(200).json({ reply });
   } catch (err) {
-    console.error(err.response?.data || err.message);
+    console.error("Gemini API Error:", err.response?.data || err.message);
     res.status(500).json({ error: "Gemini API call failed" });
   }
 }
