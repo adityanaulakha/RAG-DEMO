@@ -1,3 +1,4 @@
+// src/App.jsx
 import React, { useState } from "react";
 import axios from "axios";
 import { Send, Upload, Recycle } from "lucide-react";
@@ -16,6 +17,7 @@ function App() {
   const [image, setImage] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // Convert file to base64
   const fileToBase64 = (file) =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -24,6 +26,7 @@ function App() {
       reader.onerror = (error) => reject(error);
     });
 
+  // Ensure Gemini output is Markdown formatted
   const formatGeminiOutput = (text) => {
     if (!text.startsWith("#")) text = "## Response\n\n" + text;
     return text;
@@ -42,42 +45,51 @@ function App() {
     setLoading(true);
 
     try {
-      // Use last 8 messages for context
-      const recentMessages = [...messages, newMessage].slice(-8);
+      // Take last 10 messages for context
+      const recentMessages = messages.slice(-10);
 
-      const contents = recentMessages.map((msg) => ({
-        role: msg.role === "bot" ? "model" : "user",
-        parts: [{ text: msg.content }],
-      }));
+      // Generate dynamic summary for follow-ups
+      const contextSummary = recentMessages
+        .map(
+          (msg, idx) =>
+            `${msg.role === "bot" ? "AI" : "User"}: ${msg.content}`
+        )
+        .join("\n");
 
-      let newParts = [];
+      let parts = [];
+
+      // Include user input and image
+      if (input) parts.push({ text: input });
       if (image) {
         const base64 = await fileToBase64(image);
-        newParts.push({ inline_data: { mime_type: image.type, data: base64 } });
+        parts.push({ inline_data: { mime_type: image.type, data: base64 } });
       }
 
-      // Add system prompt for friendly, open-ended conversation
-      contents.push({
-        role: "user",
-        parts: [
-          {
-            text: `
-You are a friendly AI assistant called CleanSight 🌱. 
-- Help users with recycling, reuse, disposal, cleanliness, and follow-up questions.
-- Provide practical tips, DIY hacks, and advice.
-- Only warn if the item is genuinely hazardous (chemicals, gas cylinders).
-- Start with a **bold heading** summarizing main advice.
-- Use bullet points or numbered steps.
-- Include emojis (♻️, ✅, ⚠️, 🧽, 🏭) for clarity.
-- Answer follow-up questions naturally, referring to previous messages if needed.
-- If an image is uploaded, describe it briefly and give tailored advice.
-- Keep responses friendly, engaging, concise, and formatted in Markdown.
-            `.trim(),
-          },
-          ...newParts,
-        ],
-      });
+      // Construct message payload
+      const contents = [
+        {
+          role: "user",
+          parts: [
+            {
+              text: `
+You are CleanSight 🌱, a friendly AI assistant for recycling, reuse, disposal, and related follow-up questions.
+- Track the conversation dynamically.
+- Refer to previous messages in context.
+- Only warn about hazards once per item; for follow-ups, expand, clarify, or give practical advice.
+- Provide safe, practical reuse, DIY, or disposal tips for ordinary items.
+- Use Markdown, bullet points, bold, and emojis (♻️, ✅, ⚠️, 🧽, 🏭).
+- Conversation summary so far:
+${contextSummary}
 
+User's latest query or image:
+            `.trim(),
+            },
+            ...parts,
+          ],
+        },
+      ];
+
+      // Call serverless function that contains Gemini API key
       const res = await axios.post("/api/gemini", { contents });
       const rawReply = res.data.reply || "⚠️ No response from CleanSight AI.";
       const botReply = formatGeminiOutput(rawReply);
@@ -122,20 +134,14 @@ You are a friendly AI assistant called CleanSight 🌱.
               )}
               {msg.role === "bot" ? (
                 <div className="prose prose-green max-w-none break-words">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {msg.content}
-                  </ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                 </div>
               ) : (
                 msg.content
               )}
             </div>
           ))}
-          {loading && (
-            <p className="text-sm text-gray-500 animate-pulse">
-              ⏳ CleanSight is thinking...
-            </p>
-          )}
+          {loading && <p className="text-sm text-gray-500 animate-pulse">⏳ CleanSight is thinking...</p>}
         </div>
 
         <div className="p-3 border-t flex items-center gap-2 bg-white">
@@ -153,7 +159,7 @@ You are a friendly AI assistant called CleanSight 🌱.
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask anything..."
+            placeholder="Ask about recycling, disposal, reuse, or follow-ups..."
             className="flex-1 p-3 border rounded-xl focus:ring-2 focus:ring-green-400 outline-none"
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
           />
