@@ -1,24 +1,18 @@
-export default async function handler(req, res) {
-  console.log("Received request:", req.body);
-  console.log("API Key present?", !!process.env.GEMINI_API_KEY);
+import axios from "axios";
 
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+export default async function handler(req, res) {
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  const { contents } = req.body;
+  if (!contents) return res.status(400).json({ error: "No contents provided" });
+
+  console.log("GEMINI_API_KEY:", process.env.GEMINI_API_KEY ? "exists" : "missing");
 
   try {
-    const { contents } = req.body;
-    if (!contents) return res.status(400).json({ error: "No contents provided" });
-
     const response = await axios.post(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent",
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`,
       { contents },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.GEMINI_API_KEY}`,
-        },
-      }
+      { headers: { "Content-Type": "application/json" } }
     );
 
     const reply =
